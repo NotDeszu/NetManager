@@ -44,6 +44,17 @@ services:
       DATABASE_URL: "postgresql://myuser:mypassword@postgres:5432/saas_db"
     networks:
       - nms_network
+   # --- ADD THE NEW FRONTEND SERVICE ---
+  saas-frontend:
+    build:
+      context: ./frontend # Build from the 'frontend' folder
+    container_name: saas_frontend
+    ports:
+      - "8080:80" # Map host port 8080 to container port 80 (Nginx default)
+    depends_on:
+      - saas-backend # Frontend depends on the backend
+    networks:
+      - nms_network
 
 # Define the shared network for containers to communicate
 networks:
