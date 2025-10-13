@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # The PostgreSQL Database Service
+  postgres:
+    image: postgres:13-alpine # Use a specific, lightweight version of Postgres
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: saas_db
+    ports:
+      - "5432:5432" # Expose the DB port to your host machine for easy connection
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Persist database data
+    networks:
+      - nms_network
+
+  # The PgAdmin GUI Service
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin_gui
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "admin@example.com"
+      PGADMIN_DEFAULT_PASSWORD: "admin"
+    ports:
+      - "5050:80" # Access PgAdmin UI on http://localhost:5050
+    depends_on:
+      - postgres # Tells Docker to start Postgres before starting PgAdmin
+    networks:
+      - nms_network
+
+  # Your custom Express.js Backend Service
+  saas-backend:
+    build: ./backend # Tell Docker to build this image from the 'backend' folder
+    container_name: saas_backend
+    ports:
+      - "3000:3000" # Expose your API on http://localhost:3000
+    volumes:
+      - ./backend:/app # Mount your local 'backend' code into the container
+    depends_on:
+      - postgres # Your app needs the database to be running first
+    environment:
+      DATABASE_URL: "postgresql://myuser:mypassword@postgres:5432/saas_db"
+    networks:
+      - nms_network
+
+# Define the shared network for containers to communicate
+networks:
+  nms_network:
+
+# Define the volume for persistent data
+volumes:
+  postgres_data:

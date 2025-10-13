@@ -1,0 +1,24 @@
+# Node dependencies
+backend/node_modules/
+npm-debug.log
+yarn-error.log
+
+# Environment variables
+.env
+.env.*
+
+# Docker
+# (keep docker-compose.yml — don't ignore it!)
+docker-data/
+volumes/
+*.pid
+*.sock
+*.log
+
+# Build outputs (if later you build React frontend)
+dist/
+build/
+
+# System files
+.DS_Store
+Thumbs.db
