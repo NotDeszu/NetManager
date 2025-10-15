@@ -1,0 +1,19 @@
+# This is a comment. It's ignored.
+
+# Ignore the local node_modules folder. This is the most important one for speed.
+node_modules
+
+# Ignore the production build output folder. We only want this to be
+# generated inside the container during a production build.
+build
+
+# Ignore local environment variable files. These should not be baked into the image.
+# The container gets its environment from docker-compose.yml.
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Ignore npm debug logs
+npm-debug.log*

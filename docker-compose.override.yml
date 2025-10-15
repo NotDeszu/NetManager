@@ -1,0 +1,16 @@
+services:
+  saas-frontend:
+    container_name: saas_frontend_dev
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev # <--- THIS IS THE CRITICAL NEW LINE
+    command: npm start
+    ports:
+      - "8081:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - REACT_APP_API_BASE_URL=http://localhost:3000/api
+    networks:
+      - nms_network

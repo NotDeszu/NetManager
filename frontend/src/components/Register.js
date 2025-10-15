@@ -8,9 +8,11 @@ function Register() {
     const onChange = e => setFormData({ ...formData, [e.target.name]: e.target.value });
 
     const onSubmit = async e => {
-        e.preventDefault();
+        e.preventDefault(); 
         try {
-            const res = await axios.post('/api/register', formData);
+            // Use the environment variable to build the URL
+            const apiUrl = `${process.env.REACT_APP_API_BASE_URL}/register`;
+            const res = await axios.post(apiUrl, formData);
             setMessage(res.data.message);
         } catch (error) {
             setMessage(error.response.data.error);

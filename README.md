@@ -1,4 +1,4 @@
-Multi-Tenant NMSaaS Platform
+Net Manager
 
 This project aims to build a cloud-hosted, multi-tenant Network Monitoring as a Service (NMSaaS) platform, leveraging the LibreNMS engine to provide network monitoring with a user-friendly interface for small to medium-sized organizations. The platform will run on a single cloud VM and uses Docker for containerization, ensuring a consistent, reproducible, and cost-effective environment.
 

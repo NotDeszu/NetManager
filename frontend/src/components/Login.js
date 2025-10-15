@@ -10,10 +10,11 @@ function Login() {
     const onSubmit = async e => {
         e.preventDefault();
         try {
-            const res = await axios.post('/api/login', formData);
+            // Use the environment variable to build the URL
+            const apiUrl = `${process.env.REACT_APP_API_BASE_URL}/login`;
+            const res = await axios.post(apiUrl, formData);
             localStorage.setItem('token', res.data.token);
             setMessage(res.data.message);
-            // In a real app, you would redirect here:
             // window.location.href = '/dashboard';
         } catch (error) {
             setMessage(error.response.data.error);

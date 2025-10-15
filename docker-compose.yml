@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # The PostgreSQL Database Service
   postgres:
@@ -15,6 +13,12 @@ services:
       - postgres_data:/var/lib/postgresql/data # Persist database data
     networks:
       - nms_network
+    # --- ADD THIS HEALTHCHECK BLOCK BACK IN ---
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d saas_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # The PgAdmin GUI Service
   pgadmin:
@@ -30,29 +34,28 @@ services:
     networks:
       - nms_network
 
-  # Your custom Express.js Backend Service
   saas-backend:
     build: ./backend # Tell Docker to build this image from the 'backend' folder
-    container_name: saas_backend
+    container_name: saas_backend 
     ports:
       - "3000:3000" # Expose your API on http://localhost:3000
     volumes:
-      - ./backend:/app # Mount your local 'backend' code into the container
+      - ./backend:/app # This volume is fine for both dev and prod
     depends_on:
-      - postgres # Your app needs the database to be running first
+      postgres: # Your app needs the database to be running first
+        condition: service_healthy
     environment:
-      DATABASE_URL: "postgresql://myuser:mypassword@postgres:5432/saas_db"
+      DATABASE_URL: "postgresql://myuser:mypassword@postgres:32/saas_db"
     networks:
       - nms_network
-   # --- ADD THE NEW FRONTEND SERVICE ---
+  # --- FRONTEND SERVICE DEFINED FOR PRODUCTION ---
   saas-frontend:
-    build:
-      context: ./frontend # Build from the 'frontend' folder
-    container_name: saas_frontend
+    build: ./frontend
+    container_name: saas_frontend_prod # Give it a distinct name
     ports:
-      - "8080:80" # Map host port 8080 to container port 80 (Nginx default)
+      - "8080:80" # Expose Nginx port
     depends_on:
-      - saas-backend # Frontend depends on the backend
+      - saas-backend
     networks:
       - nms_network
 

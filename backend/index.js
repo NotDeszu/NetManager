@@ -2,8 +2,11 @@ const express = require('express');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const cors = require('cors'); 
 
+// --- Middlewares ---
 const app = express();
+app.use(cors());
 app.use(express.json()); // Middleware to parse JSON bodies
 
 // --- Database Connection ---
