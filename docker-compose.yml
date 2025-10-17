@@ -41,11 +41,12 @@ services:
       - "3000:3000" # Expose your API on http://localhost:3000
     volumes:
       - ./backend:/app # This volume is fine for both dev and prod
+      - /app/node_modules  # Add this line
     depends_on:
       postgres: # Your app needs the database to be running first
         condition: service_healthy
     environment:
-      DATABASE_URL: "postgresql://myuser:mypassword@postgres:32/saas_db"
+      DATABASE_URL: "postgresql://myuser:mypassword@postgres:5432/saas_db"
     networks:
       - nms_network
   # --- FRONTEND SERVICE DEFINED FOR PRODUCTION ---
