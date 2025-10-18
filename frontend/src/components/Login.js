@@ -85,7 +85,7 @@ function Login() {
                             />
                             <label htmlFor="remember">Remember me</label>
                         </div>
-                        <a href="#" className="forgot-password">Forgot password?</a>
+                        <a href="Register" className="forgot-password">No tienes cuenta?</a>
                     </div>
 
                     <button type="submit" className="sign-in-btn">Sign In</button>

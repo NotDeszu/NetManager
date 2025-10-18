@@ -41,7 +41,7 @@ services:
       - "3000:3000" # Expose your API on http://localhost:3000
     volumes:
       - ./backend:/app # This volume is fine for both dev and prod
-      - /app/node_modules  # Add this line
+      - /app/node_modules  # for hot-reloading
     depends_on:
       postgres: # Your app needs the database to be running first
         condition: service_healthy
