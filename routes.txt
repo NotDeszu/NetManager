@@ -1,0 +1,56 @@
+1.Create the Database Tables:
+    Open your web browser and navigate to http://localhost:5050
+    Log in to PgAdmin using the credentials from your docker-compose.yml 
+        admin@example.com  
+        admin
+    In the PgAdmin interface:
+    Right-click on "Servers" -> "Create" -> "Server...".
+    In the "General" tab, give it a name like Docker Postgres.
+    In the "Connection" tab:
+    Host name/address: postgres (This is the service name from docker-compose.yml!)
+    Port: 5432
+    Maintenance database: saas_db
+    Username: myuser
+    Password: mypassword
+    Click "Save".
+    You should now be connected! Navigate to "Databases" -> "saas_db" -> "Schemas" -> "public".
+    Right-click on "Tables" -> "Query Tool".
+    Paste and run the following SQL code to create your tables:
+
+    CREATE TABLE tenants (
+        id SERIAL PRIMARY KEY,
+        organization_name VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE users (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+
+2.Test with Postman/Insomnia:
+    Test Registration:
+    Create a new POST request to http://localhost:3000/api/register
+    In the "Body" tab, select "raw" and "JSON".
+    Enter the following JSON:
+
+    {
+    "organizationName": "My First Company",
+    "email": "test@example.com",
+    "password": "password123"
+    }
+
+    Send the request. You should get a 201 Created response!
+    Verify in PgAdmin: Go back to PgAdmin, right-click your users table, and select "View/Edit Data" -> "All Rows". You should see your new user!
+    Test Login:
+    Create a new POST request to http://localhost:3000/api/login
+    Use the same JSON body format:
+
+    {
+    "email": "test@example.com",
+    "password": "password123"
+    }
+    Send the request. You should get a 200 OK response containing a JWT token.
