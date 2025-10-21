@@ -86,7 +86,7 @@ services:
     container_name: librenms_engine
     hostname: librenms
     ports:
-      - "8000:80"  # Access UI on http://localhost:8000
+      - "8001:8000"  # Access UI on http://localhost:8001
     environment:
       - TZ=UTC
       - PUID=1000

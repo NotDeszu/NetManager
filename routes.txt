@@ -56,7 +56,23 @@
     Send the request. You should get a 200 OK response containing a JWT token.
 
 
-    LibreNMS UI: http://localhost:8000 (complete the first-run wizard if not done).
+    LibreNMS UI: http://localhost:8001 (complete the first-run wizard if not done).
     PgAdmin: http://localhost:5050 (login with admin@example.com/admin).
     SaaS backend: http://localhost:3000.
     SaaS frontend: http://localhost:8081 (dev server).
+
+
+    **If I do a volume clean of the container "docker compose down -v"
+    while the container running:
+        docker exec -it librenms_engine bash
+        lnms config:set schedule_type.poller dispatcher
+        lnms config:set schedule_type.services dispatcher
+        lnms config:set schedule_type.discovery dispatcher
+        exit
+
+    **How to create username & password for librenms, run the command in the terminal
+        Replace admin with your desired username
+        Replace password with your desired password
+        Replace admin@example.com with your email
+        docker exec -it librenms_engine php /opt/librenms/artisan user:add admin -r admin -p pass123 -e admin@example.com
+        
