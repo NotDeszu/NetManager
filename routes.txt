@@ -54,3 +54,9 @@
     "password": "password123"
     }
     Send the request. You should get a 200 OK response containing a JWT token.
+
+
+    LibreNMS UI: http://localhost:8000 (complete the first-run wizard if not done).
+    PgAdmin: http://localhost:5050 (login with admin@example.com/admin).
+    SaaS backend: http://localhost:3000.
+    SaaS frontend: http://localhost:8081 (dev server).

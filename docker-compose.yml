@@ -49,6 +49,114 @@ services:
       DATABASE_URL: "postgresql://myuser:mypassword@postgres:5432/saas_db"
     networks:
       - nms_network
+  
+  # --- LIBRENMS SERVICES BELOW ---
+  librenms-db:  # Dedicated MariaDB for LibreNMS (since Postgres isn't supported)
+    image: mariadb:10.5
+    container_name: librenms_db
+    environment:
+      - MYSQL_ROOT_PASSWORD=passwordRoot  # Change this to something secure
+      - MYSQL_DATABASE=librenms_db
+      - MYSQL_USER=librenms_user
+      - MYSQL_PASSWORD=librenms_password  # Change these; match in librenms env
+    volumes:
+      - librenms_db_data:/var/lib/mysql
+    networks:
+      - nms_network
+    # --- REPLACE THE HEALTHCHECK WITH THIS SHELL-BASED VERSION ---
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping --host=localhost -u root -p\"$$MYSQL_ROOT_PASSWORD\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  librenms-redis:
+    image: redis:5-alpine
+    container_name: librenms_redis
+    networks:
+      - nms_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  librenms:
+    image: librenms/librenms:latest
+    container_name: librenms_engine
+    hostname: librenms
+    ports:
+      - "8000:80"  # Access UI on http://localhost:8000
+    environment:
+      - TZ=UTC
+      - PUID=1000
+      - PGID=1000
+      - DB_HOST=librenms-db
+      - DB_PORT=3306  # MariaDB default
+      - DB_NAME=librenms_db
+      - DB_USER=librenms_user
+      - DB_PASSWORD=librenms_password
+      - DB_TIMEOUT=60
+      - REDIS_HOST=librenms-redis
+      - REDIS_PORT=6379
+      - APP_KEY=base64:yIjMe9c2xIFAFZd3B8JxLyRzmvuEWEvx4l3Tq7iKEDs=  # Generate with: openssl rand -base64 32
+      - NODE_ID=1  # For single-node setup
+      - LIBRENMS_SNMP_COMMUNITY=public  # Default; change for security
+    volumes:
+      - librenms_data:/data
+    networks:
+      - nms_network
+    depends_on:
+      librenms-db:
+        condition: service_healthy
+      librenms-redis:
+        condition: service_healthy
+    # --- REPLACE THE OLD HEALTHCHECK WITH THIS ONE ---
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'php-fpm: master process' || exit 1"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 2m
+
+  librenms-dispatcher:
+    image: librenms/librenms:latest
+    container_name: librenms_dispatcher
+    hostname: librenms-dispatcher
+    environment:
+      - TZ=UTC
+      - PUID=1000
+      - PGID=1000
+      - DB_HOST=librenms-db
+      - DB_PORT=3306
+      - DB_NAME=librenms_db
+      - DB_USER=librenms_user
+      - DB_PASSWORD=librenms_password
+      - DB_TIMEOUT=60
+      - REDIS_HOST=librenms-redis
+      - REDIS_PORT=6379
+      - APP_KEY=base64:yIjMe9c2xIFAFZd3B8JxLyRzmvuEWEvx4l3Tq7iKEDs=  # Same as above
+      #- SID=librenms-dispatcher  # Unique identifier
+      - SIDECAR_DISPATCHER=1
+    #command: ["/opt/librenms/cronic", "/opt/librenms/poller-wrapper.py", "16"]  # 16 threads; adjust based on your hardware
+    volumes:
+      - librenms_data:/data
+    networks:
+      - nms_network
+    depends_on:
+      librenms-db:
+        condition: service_healthy
+      librenms-redis:
+        condition: service_healthy
+      librenms:  # Wait for main app
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'librenms-service.py' || exit 1"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 2m      
+
   # --- FRONTEND SERVICE DEFINED FOR PRODUCTION ---
   saas-frontend:
     build: ./frontend
@@ -67,3 +175,6 @@ networks:
 # Define the volume for persistent data
 volumes:
   postgres_data:
+  # --- ADD THE NEW LIBRENMS VOLUMES BELOW ---
+  librenms_db_data:
+  librenms_data:
