@@ -161,7 +161,17 @@ services:
       timeout: 10s
       retries: 3
       start_period: 2m      
-
+  # --- ADD THE NEW SNMPSIM SERVICE BELOW ---
+  snmpsim_device:
+    image: tandrup/snmpsim
+    container_name: snmpsim_device
+    hostname: snmpsim_device
+    environment:
+      - EXTRA_FLAGS=--agent-udpv4-endpoint=0.0.0.0:161 --v2c-arch
+    ports:
+      - "1161:161/udp"
+    networks:
+      - nms_network
   # --- FRONTEND SERVICE DEFINED FOR PRODUCTION ---
   saas-frontend:
     build: ./frontend
