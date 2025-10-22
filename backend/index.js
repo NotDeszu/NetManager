@@ -3,6 +3,8 @@ const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors'); 
+const axios = require('axios');
+const http = require('http');
 
 // --- Middlewares ---
 const app = express();
@@ -121,7 +123,44 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
+// --- LibreNMS API Test Endpoint ---
+app.get('/api/test-librenms', async (req, res) => {
+    // We will build the full URL to the LibreNMS API endpoint
+    // NOTE: We use the service name 'librenms' as the hostname because we are inside the Docker network.
+    const libreNmsUrl = 'http://librenms:8000/api/v0/system';
 
+    // We retrieve the API token from the environment variable we just set
+    //const apiToken = process.env.LIBRENMS_API_TOKEN;
+    const apiToken = process.env.LIBRENMS_API_TOKEN ? process.env.LIBRENMS_API_TOKEN.trim() : null;
+
+    if (!apiToken) {
+        return res.status(500).json({ error: 'LibreNMS API token is not configured.' });
+    }
+
+    try {
+       // --- 2. Create a custom agent that disables Keep-Alive ---
+        const agent = new http.Agent({ keepAlive: false });
+        console.log(`Attempting to contact LibreNMS at: ${libreNmsUrl}`);
+
+        const response = await axios.get(libreNmsUrl, {
+            headers: {
+                'X-Auth-Token': apiToken
+            },
+            httpAgent: agent // <--- Add this line
+        });
+
+        // If the request is successful, send the data back to the client
+        res.status(200).json(response.data);
+
+    } catch (error) {
+        console.error('Error contacting LibreNMS API:', error.message);
+        // If there's an error, send back a detailed error message
+        res.status(500).json({ 
+            error: 'Failed to communicate with the LibreNMS service.',
+            details: error.message 
+        });
+    }
+});
 // --- Start Server ---
 const PORT = 3000;
 app.listen(PORT, () => {

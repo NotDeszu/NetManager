@@ -56,7 +56,7 @@
     Send the request. You should get a 200 OK response containing a JWT token.
 
 
-    LibreNMS UI: http://localhost:8001 (complete the first-run wizard if not done).
+    LibreNMS UI: http://localhost:8000 (complete the first-run wizard if not done).
     PgAdmin: http://localhost:5050 (login with admin@example.com/admin).
     SaaS backend: http://localhost:3000.
     SaaS frontend: http://localhost:8081 (dev server).
@@ -76,3 +76,26 @@
         Replace admin@example.com with your email
         docker exec -it librenms_engine php /opt/librenms/artisan user:add admin -r admin -p pass123 -e admin@example.com
         
+        (for now we leave this as possible)
+    **At first the librenms database is using the wrong "sorting rules" (collation). 
+    Think of it like using the wrong alphabet order - it works mostly, but can cause problems with special characters.
+    to fix, run this command and type "y"
+        docker exec -it -u librenms librenms_engine php /opt/librenms/validate.php
+
+    Test libreNMS API with postman:
+    1.Open Postman.
+    2.Create a new request:
+        Method: GET
+        URL: http://localhost:8000/api/v0/system
+            Why? We are sending this request from our PC (where Postman lives), so we use localhost and the port 8000 that we mapped to the LibreNMS container.
+    3.Add the Authentication Header:
+        Go to the Headers tab.
+        In a new row, add the following:
+        KEY: X-Auth-Token
+        VALUE: Paste the full API token string you copied and saved (NOT the short "Token Hash").
+    4.Send the Request
+
+    Use Postman Again: This time, we will test our own backend endpoint.
+        Method: GET
+        URL: http://localhost:3000/api/test-librenms
+        You do not need any headers for this request.

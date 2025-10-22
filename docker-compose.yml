@@ -47,6 +47,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: "postgresql://myuser:mypassword@postgres:5432/saas_db"
+      LIBRENMS_API_TOKEN: ${LIBRENMS_API_TOKEN}
     networks:
       - nms_network
   
@@ -86,7 +87,7 @@ services:
     container_name: librenms_engine
     hostname: librenms
     ports:
-      - "8001:8000"  # Access UI on http://localhost:8001
+      - "8000:8000"  # Access UI on http://localhost:8000
     environment:
       - TZ=UTC
       - PUID=1000
@@ -102,6 +103,10 @@ services:
       - APP_KEY=base64:yIjMe9c2xIFAFZd3B8JxLyRzmvuEWEvx4l3Tq7iKEDs=  # Generate with: openssl rand -base64 32
       - NODE_ID=1  # For single-node setup
       - LIBRENMS_SNMP_COMMUNITY=public  # Default; change for security
+            # --- Automatic Admin User Creation ---
+      - LIBRENMS_USER_NAME=${LIBRENMS_ADMIN_USER}
+      - LIBRENMS_USER_PASSWORD=${LIBRENMS_ADMIN_PASS}
+      - LIBRENMS_USER_EMAIL=${LIBRENMS_ADMIN_EMAIL}
     volumes:
       - librenms_data:/data
     networks:
