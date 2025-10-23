@@ -161,6 +161,72 @@ app.get('/api/test-librenms', async (req, res) => {
         });
     }
 });
+
+// --- Add a New Device for a Tenant ---
+app.post('/api/devices', async (req, res) => {
+    // In a real application, we would get the tenant_id from a validated JWT.
+    // For now, we'll simulate it. This is a critical security step.
+    const tenantId = 1; // HARDCODED FOR NOW - will come from JWT later.
+
+    const { hostname, snmp_community } = req.body;
+
+    if (!hostname || !snmp_community) {
+        return res.status(400).json({ error: 'Hostname and SNMP community are required.' });
+    }
+
+    const libreNmsUrl = `http://librenms:8000/api/v0/devices`;
+    const apiToken = process.env.LIBRENMS_API_TOKEN ? process.env.LIBRENMS_API_TOKEN.trim() : null;
+
+    if (!apiToken) {
+        return res.status(500).json({ error: 'LibreNMS API token is not configured.' });
+    }
+
+    // This is the data payload LibreNMS expects.
+    // We add the device with version v2c by default.
+    const deviceData = {
+        hostname: hostname,
+        community: snmp_community,
+        version: 'v2c'
+    };
+
+    try {
+        console.log(`Adding device for tenant ${tenantId}: ${hostname}`);
+        
+        // Make the POST request to the LibreNMS API
+        const response = await axios.post(libreNmsUrl, deviceData, {
+            headers: { 'X-Auth-Token': apiToken }
+        });
+
+        // Check if LibreNMS responded with a success status
+        if (response.data.status === 'ok') {
+            const newDevice = response.data.devices[0];
+            console.log(`LibreNMS successfully added device with ID: ${newDevice.device_id}`);
+            
+            // --- CRITICAL NEXT STEP (Future) ---
+            // Here, you would save a record in your OWN `saas_db` (PostgreSQL)
+            // to link the LibreNMS device_id to your tenant_id.
+            // e.g., INSERT INTO tenant_devices (tenant_id, librenms_device_id) VALUES (1, 123);
+            // This is how you enforce multi-tenancy!
+
+            res.status(201).json({ 
+                message: 'Device added successfully!',
+                device: newDevice
+            });
+
+        } else {
+            // If LibreNMS returns a non-ok status, forward the error
+            res.status(400).json({ error: 'LibreNMS failed to add the device.', details: response.data.message });
+        }
+
+    } catch (error) {
+        console.error('Error adding device via LibreNMS API:', error.message);
+        res.status(500).json({ 
+            error: 'Failed to communicate with the LibreNMS service.',
+            details: error.response ? error.response.data : error.message
+        });
+    }
+});
+
 // --- Start Server ---
 const PORT = 3000;
 app.listen(PORT, () => {

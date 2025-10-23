@@ -116,7 +116,6 @@ services:
         condition: service_healthy
       librenms-redis:
         condition: service_healthy
-    # --- REPLACE THE OLD HEALTHCHECK WITH THIS ONE ---
     healthcheck:
       test: ["CMD-SHELL", "pgrep -f 'php-fpm: master process' || exit 1"]
       interval: 1m
@@ -170,6 +169,28 @@ services:
       - EXTRA_FLAGS=--agent-udpv4-endpoint=0.0.0.0:161 --v2c-arch
     ports:
       - "1161:161/udp"
+    networks:
+      - nms_network
+ 
+  snmpsim_device_2:
+    image: tandrup/snmpsim
+    container_name: snmpsim_device_2
+    hostname: snmpsim_device_2
+    environment:
+      - EXTRA_FLAGS=--agent-udpv4-endpoint=0.0.0.0:161 --v2c-arch
+    ports:
+      - "1162:161/udp"  # Unique host port for external testing (optional)
+    networks:
+      - nms_network
+
+  snmpsim_device_3:
+    image: tandrup/snmpsim
+    container_name: snmpsim_device_3
+    hostname: snmpsim_device_3
+    environment:
+      - EXTRA_FLAGS=--agent-udpv4-endpoint=0.0.0.0:161 --v2c-arch
+    ports:
+      - "1163:161/udp"
     networks:
       - nms_network
   # --- FRONTEND SERVICE DEFINED FOR PRODUCTION ---

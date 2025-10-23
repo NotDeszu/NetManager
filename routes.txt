@@ -82,6 +82,11 @@
     to fix, run this command and type "y"
         docker exec -it -u librenms librenms_engine php /opt/librenms/validate.php
 
+    TO se what port the service inside docker is listening to 
+    desu@MainDesu:~$ docker exec -it librenms_engine netstat -tlnp | grep :80
+    tcp        0      0 0.0.0.0:8000            0.0.0.0:*               LISTEN      -
+    tcp        0      0 :::8000                 :::*                    LISTEN      -
+
     Test libreNMS API with postman:
     1.Open Postman.
     2.Create a new request:
@@ -99,3 +104,10 @@
         Method: GET
         URL: http://localhost:3000/api/test-librenms
         You do not need any headers for this request.
+
+    For testing snmpsim
+        Disable Duplicate sysName Detection
+        docker exec -it librenms_engine bash
+        /opt/librenms/lnms config:set allow_duplicate_sysName true
+        exit
+        /opt/librenms/lnms config:set allow_duplicate_sysName false    #to re enabled the service, once we move on from testing
