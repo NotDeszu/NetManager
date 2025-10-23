@@ -2,19 +2,67 @@ import React, { useState, useEffect } from 'react';
 import './Dashboard.css';
 
 function Dashboard() {
-    const [user, setUser] = useState({ email: 'admin@example.com' });
+    const [devices, setDevices] = useState([]);
+    const [newDevice, setNewDevice] = useState({ hostname: '', snmp_community: 'public' });
+    const [message, setMessage] = useState('');
+    const [showAddForm, setShowAddForm] = useState(false);
+
+    const fetchDevices = async () => {
+        try {
+            const apiUrl = `${process.env.REACT_APP_API_BASE_URL}/devices`;
+            const response = await fetch(apiUrl);
+            if (!response.ok) throw new Error('Failed to fetch');
+            const data = await response.json();
+            setDevices(data);
+        } catch (error) {
+            console.error('Error fetching devices:', error);
+            setMessage('Failed to fetch devices.');
+        }
+    };
 
     useEffect(() => {
-        // You can fetch user data here using the token from localStorage
-        const token = localStorage.getItem('token');
-        if (!token) {
-            window.location.href = '/login';
-        }
+        fetchDevices();
+        const interval = setInterval(fetchDevices, 30000);
+        return () => clearInterval(interval);
     }, []);
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        window.location.href = '/login';
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setNewDevice(prevState => ({ ...prevState, [name]: value }));
+    };
+
+    const handleAddDevice = async (e) => {
+        e.preventDefault();
+        setMessage('');
+
+        try {
+            const apiUrl = `${process.env.REACT_APP_API_BASE_URL}/devices`;
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newDevice)
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to add device');
+            }
+            
+            setMessage(data.message);
+            setNewDevice({ hostname: '', snmp_community: 'public' });
+            setShowAddForm(false);
+            fetchDevices();
+        } catch (error) {
+            console.error('Error adding device:', error);
+            setMessage(error.message || 'Failed to add device.');
+        }
+    };
+
+    const stats = {
+        total: devices.length,
+        online: devices.filter(d => d.status === true).length,
+        offline: devices.filter(d => d.status === false).length
     };
 
     return (
@@ -22,23 +70,68 @@ function Dashboard() {
             <div className="header">
                 <div className="logo">
                     <div className="logo-icon">📊</div>
-                    <h1>NetManager</h1>
+                    <h1 className="logo-text">NetManager</h1>
                 </div>
                 <div className="user-info">
-                    <span>{user.email}</span>
-                    <button className="filter-btn" onClick={handleLogout}>Logout</button>
+                    <button 
+                        className="add-button"
+                        onClick={() => setShowAddForm(!showAddForm)}
+                    >
+                        {showAddForm ? '✕ Cancel' : '+ Add Device'}
+                    </button>
                 </div>
             </div>
 
             <div className="container">
+                {message && (
+                    <div className={`message ${message.includes('Failed') || message.includes('error') ? 'message-error' : 'message-success'}`}>
+                        {message}
+                    </div>
+                )}
+
+                {showAddForm && (
+                    <div className="add-form-card">
+                        <h2 className="form-title">Add New Device</h2>
+                        <div className="form">
+                            <div className="form-group">
+                                <label className="label">Hostname</label>
+                                <input
+                                    type="text"
+                                    name="hostname"
+                                    value={newDevice.hostname}
+                                    onChange={handleInputChange}
+                                    placeholder="e.g., router-01.network.local"
+                                    className="input"
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label className="label">SNMP Community</label>
+                                <input
+                                    type="text"
+                                    name="snmp_community"
+                                    value={newDevice.snmp_community}
+                                    onChange={handleInputChange}
+                                    className="input"
+                                />
+                            </div>
+                            <button 
+                                onClick={handleAddDevice} 
+                                className="submit-button"
+                            >
+                                Add Device
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 <div className="stats-grid">
                     <div className="stat-card">
                         <div className="stat-header">
                             <span className="stat-title">Total Devices</span>
                             <div className="stat-icon">🖥️</div>
                         </div>
-                        <div className="stat-value">24</div>
-                        <div className="stat-change">↑ 2 new this week</div>
+                        <div className="stat-value">{stats.total}</div>
+                        <div className="stat-change">Monitored devices</div>
                     </div>
 
                     <div className="stat-card">
@@ -46,151 +139,78 @@ function Dashboard() {
                             <span className="stat-title">Online</span>
                             <div className="stat-icon">✓</div>
                         </div>
-                        <div className="stat-value">22</div>
-                        <div className="stat-change">91.7% uptime</div>
+                        <div className="stat-value">{stats.online}</div>
+                        <div className="stat-change">
+                            {stats.total > 0 ? `${Math.round((stats.online / stats.total) * 100)}% uptime` : '0% uptime'}
+                        </div>
                     </div>
 
                     <div className="stat-card">
                         <div className="stat-header">
-                            <span className="stat-title">Alerts</span>
-                            <div className="stat-icon">⚠️</div>
+                            <span className="stat-title">Offline</span>
+                            <div className="stat-icon stat-icon-offline">⚠️</div>
                         </div>
-                        <div className="stat-value">3</div>
-                        <div className="stat-change negative">↑ 1 since yesterday</div>
-                    </div>
-
-                    <div className="stat-card">
-                        <div className="stat-header">
-                            <span className="stat-title">Avg. CPU Usage</span>
-                            <div className="stat-icon">📈</div>
+                        <div className="stat-value">{stats.offline}</div>
+                        <div className={`stat-change ${stats.offline > 0 ? 'stat-change-offline' : 'stat-change-online'}`}>
+                            {stats.offline > 0 ? 'Needs attention' : 'All systems operational'}
                         </div>
-                        <div className="stat-value">34%</div>
-                        <div className="stat-change">↓ 5% from last hour</div>
-                    </div>
-                </div>
-
-                <div className="chart-section">
-                    <div className="section-header">
-                        <h2 className="section-title">Network Traffic Overview</h2>
-                        <button className="filter-btn">Last 24 Hours</button>
-                    </div>
-                    <div className="chart-placeholder">
-                        📊 Traffic chart visualization would go here
                     </div>
                 </div>
 
                 <div className="devices-section">
                     <div className="section-header">
-                        <h2 className="section-title">Active Devices</h2>
-                        <button className="filter-btn">View All</button>
+                        <h2 className="section-title">Monitored Devices</h2>
+                        <span className="refresh-info">Auto-refresh: 30s</span>
                     </div>
 
-                    <div className="devices-grid">
-                        <DeviceCard 
-                            name="Core Switch 01"
-                            type="Cisco Catalyst 9300"
-                            status="online"
-                            cpu={23}
-                            temperature={42}
-                            memory="5.2 GB"
-                            uptime="45 days"
-                            interfaces={[
-                                { name: 'eth0', speed: '1 Gbps ↑↓' },
-                                { name: 'eth1', speed: '10 Gbps ↑↓' }
-                            ]}
-                        />
-
-                        <DeviceCard 
-                            name="Router 01"
-                            type="Juniper MX204"
-                            status="warning"
-                            cpu={78}
-                            temperature={68}
-                            memory="12.8 GB"
-                            uptime="12 days"
-                            interfaces={[
-                                { name: 'ge-0/0/0', speed: '10 Gbps ↑↓' },
-                                { name: 'ge-0/0/1', speed: '10 Gbps ↑↓' }
-                            ]}
-                        />
-
-                        <DeviceCard 
-                            name="Firewall 01"
-                            type="Fortinet FortiGate 600E"
-                            status="online"
-                            cpu={34}
-                            temperature={48}
-                            memory="8.4 GB"
-                            uptime="89 days"
-                            interfaces={[
-                                { name: 'port1', speed: '1 Gbps ↑↓' },
-                                { name: 'port2', speed: '1 Gbps ↑↓' }
-                            ]}
-                        />
-                    </div>
+                    {devices.length > 0 ? (
+                        <div className="devices-grid">
+                            {devices.map(device => (
+                                <DeviceCard key={device.device_id} device={device} />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="empty-state">
+                            <div className="empty-icon">📡</div>
+                            <p className="empty-text">No devices are currently being monitored.</p>
+                            <p className="empty-subtext">Click "Add Device" to start monitoring your network.</p>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
     );
 }
 
-function DeviceCard({ name, type, status, cpu, temperature, memory, uptime, interfaces }) {
+function DeviceCard({ device }) {
+    const [isHovered, setIsHovered] = useState(false);
+    const isOnline = device.status === true;
+    
     return (
-        <div className="device-card">
+        <div 
+            className={`device-card ${isHovered ? 'device-card-hovered' : ''}`}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+        >
             <div className="device-header">
                 <div className="device-info">
-                    <h3>{name}</h3>
-                    <p className="device-type">{type}</p>
+                    <h3 className="device-name">{device.hostname}</h3>
+                    <p className="device-type">{device.os || 'Unknown OS'}</p>
                 </div>
-                <span className={`status-badge status-${status}`}>
-                    {status === 'online' ? 'Online' : 'Warning'}
+                <span className={`status-badge ${isOnline ? 'status-badge-online' : 'status-badge-offline'}`}>
+                    {isOnline ? 'Online' : 'Offline'}
                 </span>
             </div>
             
-            <div className="metrics">
-                <div className="metric">
-                    <span className="metric-label">CPU Usage</span>
-                    <span className="metric-value">{cpu}%</span>
-                    <div className="progress-bar">
-                        <div 
-                            className={`progress-fill ${cpu > 70 ? 'high' : ''}`}
-                            style={{ width: `${cpu}%` }}
-                        ></div>
-                    </div>
+            <div className="device-details">
+                <div className="detail-row">
+                    <span className="detail-label">IP Address</span>
+                    <span className="detail-value">{device.ip || 'N/A'}</span>
                 </div>
-                <div className="metric">
-                    <span className="metric-label">Temperature</span>
-                    <span className="metric-value">{temperature}°C</span>
-                    <div className="progress-bar">
-                        <div 
-                            className={`progress-fill ${temperature > 60 ? 'high' : ''}`}
-                            style={{ width: `${temperature}%` }}
-                        ></div>
-                    </div>
+                <div className="detail-row">
+                    <span className="detail-label">Device ID</span>
+                    <span className="detail-value">{device.device_id}</span>
                 </div>
-                <div className="metric">
-                    <span className="metric-label">Memory</span>
-                    <span className="metric-value">{memory}</span>
-                    <div className="progress-bar">
-                        <div 
-                            className="progress-fill"
-                            style={{ width: '65%' }}
-                        ></div>
-                    </div>
-                </div>
-                <div className="metric">
-                    <span className="metric-label">Uptime</span>
-                    <span className="metric-value">{uptime}</span>
-                </div>
-            </div>
-
-            <div className="interfaces-list">
-                {interfaces.map((iface, idx) => (
-                    <div key={idx} className="interface-item">
-                        <span className="interface-name">{iface.name}</span>
-                        <span className="interface-speed">{iface.speed}</span>
-                    </div>
-                ))}
             </div>
         </div>
     );

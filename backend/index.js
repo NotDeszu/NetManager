@@ -33,7 +33,7 @@ app.post('/api/register', async (req, res) => {
 
   try {
     console.log('Attempting to get a client from the database pool...');
-    client = await pool.connect(); // This is the most likely place it's getting stuck
+    client = await pool.connect();
     console.log('Successfully connected to the database and got a client.');
 
     await client.query('BEGIN');
@@ -125,12 +125,7 @@ app.post('/api/login', async (req, res) => {
 
 // --- LibreNMS API Test Endpoint ---
 app.get('/api/test-librenms', async (req, res) => {
-    // We will build the full URL to the LibreNMS API endpoint
-    // NOTE: We use the service name 'librenms' as the hostname because we are inside the Docker network.
     const libreNmsUrl = 'http://librenms:8000/api/v0/system';
-
-    // We retrieve the API token from the environment variable we just set
-    //const apiToken = process.env.LIBRENMS_API_TOKEN;
     const apiToken = process.env.LIBRENMS_API_TOKEN ? process.env.LIBRENMS_API_TOKEN.trim() : null;
 
     if (!apiToken) {
@@ -138,27 +133,68 @@ app.get('/api/test-librenms', async (req, res) => {
     }
 
     try {
-       // --- 2. Create a custom agent that disables Keep-Alive ---
         const agent = new http.Agent({ keepAlive: false });
         console.log(`Attempting to contact LibreNMS at: ${libreNmsUrl}`);
 
         const response = await axios.get(libreNmsUrl, {
-            headers: {
-                'X-Auth-Token': apiToken
-            },
-            httpAgent: agent // <--- Add this line
+            headers: { 'X-Auth-Token': apiToken },
+            httpAgent: agent
         });
 
-        // If the request is successful, send the data back to the client
         res.status(200).json(response.data);
 
     } catch (error) {
         console.error('Error contacting LibreNMS API:', error.message);
-        // If there's an error, send back a detailed error message
         res.status(500).json({ 
             error: 'Failed to communicate with the LibreNMS service.',
             details: error.message 
         });
+    }
+});
+
+// --- Get All Devices for a Tenant ---
+// TODO: This endpoint needs to be protected by JWT middleware
+app.get('/api/devices', async (req, res) => {
+    // For now, we are still hardcoding the tenant ID.
+    // Soon, the JWT middleware will provide this for us from the user's token.
+    const tenantId = 1;
+
+    const libreNmsUrl = `http://librenms:8000/api/v0/devices`;
+    const apiToken = process.env.LIBRENMS_API_TOKEN ? process.env.LIBRENMS_API_TOKEN.trim() : null;
+
+    if (!apiToken) {
+        return res.status(500).json({ error: 'LibreNMS API token is not configured.' });
+    }
+
+    const client = await pool.connect();
+    try {
+        // Step 1: Get the list of device IDs this tenant owns from OUR database.
+        const ownedDevicesResult = await client.query(
+            'SELECT librenms_device_id FROM tenant_devices WHERE tenant_id = $1',
+            [tenantId]
+        );
+        const ownedDeviceIds = ownedDevicesResult.rows.map(row => row.librenms_device_id);
+
+        if (ownedDeviceIds.length === 0) {
+            return res.status(200).json([]); // Return an empty array if they own no devices
+        }
+
+        // Step 2: Get the details for ALL devices from the LibreNMS API.
+        const libreNmsResponse = await axios.get(libreNmsUrl, {
+            headers: { 'X-Auth-Token': apiToken }
+        });
+        const allDevices = libreNmsResponse.data.devices;
+
+        // Step 3: Filter the full list from LibreNMS to only include the ones this tenant owns.
+        const tenantDevices = allDevices.filter(device => ownedDeviceIds.includes(device.device_id));
+
+        res.status(200).json(tenantDevices);
+
+    } catch (error) {
+        console.error('Error fetching devices:', error.message);
+        res.status(500).json({ error: 'Failed to fetch device data.' });
+    } finally {
+        client.release();
     }
 });
 
@@ -181,8 +217,6 @@ app.post('/api/devices', async (req, res) => {
         return res.status(500).json({ error: 'LibreNMS API token is not configured.' });
     }
 
-    // This is the data payload LibreNMS expects.
-    // We add the device with version v2c by default.
     const deviceData = {
         hostname: hostname,
         community: snmp_community,
@@ -193,20 +227,26 @@ app.post('/api/devices', async (req, res) => {
         console.log(`Adding device for tenant ${tenantId}: ${hostname}`);
         
         // Make the POST request to the LibreNMS API
-        const response = await axios.post(libreNmsUrl, deviceData, {
+        const libreNmsResponse = await axios.post(libreNmsUrl, deviceData, {
             headers: { 'X-Auth-Token': apiToken }
         });
 
-        // Check if LibreNMS responded with a success status
-        if (response.data.status === 'ok') {
-            const newDevice = response.data.devices[0];
-            console.log(`LibreNMS successfully added device with ID: ${newDevice.device_id}`);
+        if (libreNmsResponse.data.status === 'ok') {
+            const newDevice = libreNmsResponse.data.devices[0];
+            const newDeviceId = newDevice.device_id;
+            console.log(`LibreNMS successfully added device with ID: ${newDeviceId}`);
             
-            // --- CRITICAL NEXT STEP (Future) ---
-            // Here, you would save a record in your OWN `saas_db` (PostgreSQL)
-            // to link the LibreNMS device_id to your tenant_id.
-            // e.g., INSERT INTO tenant_devices (tenant_id, librenms_device_id) VALUES (1, 123);
-            // This is how you enforce multi-tenancy!
+            // Link the new device to the tenant in our own database
+            const client = await pool.connect();
+            try {
+                await client.query(
+                    'INSERT INTO tenant_devices (tenant_id, librenms_device_id) VALUES ($1, $2)',
+                    [tenantId, newDeviceId]
+                );
+                console.log(`Successfully linked device ${newDeviceId} to tenant ${tenantId} in saas_db.`);
+            } finally {
+                client.release();
+            }
 
             res.status(201).json({ 
                 message: 'Device added successfully!',
@@ -214,8 +254,7 @@ app.post('/api/devices', async (req, res) => {
             });
 
         } else {
-            // If LibreNMS returns a non-ok status, forward the error
-            res.status(400).json({ error: 'LibreNMS failed to add the device.', details: response.data.message });
+            res.status(400).json({ error: 'LibreNMS failed to add the device.', details: libreNmsResponse.data.message });
         }
 
     } catch (error) {

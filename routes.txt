@@ -31,6 +31,14 @@
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE tenant_devices (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        librenms_device_id INTEGER NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (tenant_id, librenms_device_id) -- A tenant can't own the same device twice
+    );
+
 2.Test with Postman/Insomnia:
     Test Registration:
     Create a new POST request to http://localhost:3000/api/register
@@ -111,3 +119,10 @@
         /opt/librenms/lnms config:set allow_duplicate_sysName true
         exit
         /opt/librenms/lnms config:set allow_duplicate_sysName false    #to re enabled the service, once we move on from testing
+
+    Test via Postman
+        POST: http://localhost:3000/api/devices
+        {
+            "hostname": "snmpsim_device_2",
+            "snmp_community": "demo"
+        }
