@@ -5,8 +5,6 @@ yarn-error.log
 
 # Environment variables
 .env
-.env.*
-
 # Docker
 # (keep docker-compose.yml — don't ignore it!)
 docker-data/
