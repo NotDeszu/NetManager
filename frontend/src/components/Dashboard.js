@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { authenticatedFetch } from '../utils/api';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode';
 import './Dashboard.css';
 
 function Dashboard() {
@@ -8,6 +9,7 @@ function Dashboard() {
     const [newDevice, setNewDevice] = useState({ hostname: '', snmp_community: 'public' });
     const [message, setMessage] = useState('');
     const [showAddForm, setShowAddForm] = useState(false);
+    const [currentUser, setCurrentUser] = useState(null); // State for the current user's email
     const navigate = useNavigate();
 
     const fetchDevices = async () => {
@@ -22,10 +24,26 @@ function Dashboard() {
     };
 
     useEffect(() => {
+        // Decode the JWT to get the user's email when the component loads
+        const token = localStorage.getItem('token');
+        if (token) {
+            try {
+                const decodedToken = jwtDecode(token);
+                setCurrentUser(decodedToken.email); // The 'email' field we put in the payload
+            } catch (error) {
+                console.error("Failed to decode JWT:", error);
+                // Handle invalid token by logging out
+                handleLogout();
+            }
+        } else {
+            // If there's no token, redirect to login
+            navigate('/login');
+        }
+
         fetchDevices();
-        const interval = setInterval(fetchDevices, 30000);
-        return () => clearInterval(interval);
-    }, []);
+        const interval = setInterval(fetchDevices, 30000); // Auto-refresh every 30 seconds
+        return () => clearInterval(interval); // Cleanup interval on component unmount
+    }, [navigate]); // Add navigate to dependency array to satisfy ESLint
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -38,38 +56,30 @@ function Dashboard() {
 
         try {
             const apiUrl = `${process.env.REACT_APP_API_BASE_URL}/devices`;
-            
-            // Our new helper function takes the URL and an "options" object.
-            // It automatically handles the Authorization header, content-type,
-            // checking for errors, and parsing the JSON response.
             const data = await authenticatedFetch(apiUrl, {
                 method: 'POST',
                 body: JSON.stringify(newDevice)
             });
             
-            // If we get here, the request was successful.
-            // 'data' is the already-parsed JSON response body.
             setMessage(data.message);
             setNewDevice({ hostname: '', snmp_community: 'public' });
             setShowAddForm(false);
-            fetchDevices(); // Refresh the device list
+            fetchDevices(); // Refresh the device list immediately
 
         } catch (error) {
-            // Our authenticatedFetch helper throws an error if the request fails,
-            // so we just need to catch it and display the message.
             console.error('Error adding device:', error);
-            setMessage(error.message); // The error.message will contain the specific error from the API
+            setMessage(error.message);
         }
     };
+    
     const stats = {
         total: devices.length,
         online: devices.filter(d => d.status === true).length,
         offline: devices.filter(d => d.status === false).length
     };
+
     const handleLogout = () => {
-        // 1. Remove the token from the browser's local storage
         localStorage.removeItem('token');
-        // 2. Redirect the user to the login page
         navigate('/login');
     };
 
@@ -81,9 +91,11 @@ function Dashboard() {
                     <h1 className="logo-text">NetManager</h1>
                 </div>
                 <div className="user-info">
+                    {/* Display the current user's email */}
+                    {currentUser && <span className="current-user">Welcome, {currentUser}</span>}
                     <button 
                         onClick={handleLogout} 
-                        className="logout-button" // Give it a class for styling
+                        className="logout-button"
                     >
                         Log Out
                     </button>
@@ -106,7 +118,7 @@ function Dashboard() {
                 {showAddForm && (
                     <div className="add-form-card">
                         <h2 className="form-title">Add New Device</h2>
-                        <div className="form">
+                        <form className="form" onSubmit={handleAddDevice}>
                             <div className="form-group">
                                 <label className="label">Hostname</label>
                                 <input
@@ -116,6 +128,7 @@ function Dashboard() {
                                     onChange={handleInputChange}
                                     placeholder="e.g., router-01.network.local"
                                     className="input"
+                                    required
                                 />
                             </div>
                             <div className="form-group">
@@ -126,15 +139,16 @@ function Dashboard() {
                                     value={newDevice.snmp_community}
                                     onChange={handleInputChange}
                                     className="input"
+                                    required
                                 />
                             </div>
                             <button 
-                                onClick={handleAddDevice} 
+                                type="submit" 
                                 className="submit-button"
                             >
                                 Add Device
                             </button>
-                        </div>
+                        </form>
                     </div>
                 )}
 
@@ -180,7 +194,10 @@ function Dashboard() {
                     {devices.length > 0 ? (
                         <div className="devices-grid">
                             {devices.map(device => (
-                                <DeviceCard key={device.device_id} device={device} />
+                                // Make the entire card a clickable link
+                                <Link to={`/device/${device.device_id}`} key={device.device_id} className="device-card-link">
+                                    <DeviceCard device={device} />
+                                </Link>
                             ))}
                         </div>
                     ) : (
@@ -196,16 +213,13 @@ function Dashboard() {
     );
 }
 
+// NOTE: The DeviceCard component is kept as a separate component within the same file.
+// This is a common pattern for small, self-contained components.
 function DeviceCard({ device }) {
-    const [isHovered, setIsHovered] = useState(false);
     const isOnline = device.status === true;
     
     return (
-        <div 
-            className={`device-card ${isHovered ? 'device-card-hovered' : ''}`}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-        >
+        <div className={`device-card`}>
             <div className="device-header">
                 <div className="device-info">
                     <h3 className="device-name">{device.hostname}</h3>

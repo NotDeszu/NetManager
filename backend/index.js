@@ -160,6 +160,42 @@ app.get('/api/devices', authMiddleware, async (req, res) => {
         client.release();
     }
 });
+// --- Get a Single Device's Details for a Tenant (SECURED) ---
+app.get('/api/devices/:id', authMiddleware, async (req, res) => {
+    const { id } = req.params; // Get the device ID from the URL parameter
+    const tenantId = req.user.tenantId;
+
+    const apiToken = process.env.LIBRENMS_API_TOKEN ? process.env.LIBRENMS_API_TOKEN.trim() : null;
+    if (!apiToken) return res.status(500).json({ error: 'LibreNMS API token is not configured.' });
+
+    const client = await pool.connect();
+    try {
+        // SECURITY CHECK: Verify this tenant owns this device ID.
+        const ownershipCheck = await client.query(
+            'SELECT * FROM tenant_devices WHERE tenant_id = $1 AND librenms_device_id = $2',
+            [tenantId, id]
+        );
+
+        if (ownershipCheck.rows.length === 0) {
+            // If no record is found, this user does not own this device.
+            return res.status(404).json({ error: 'Device not found or you do not have permission to view it.' });
+        }
+
+        // If the check passes, fetch the details from LibreNMS.
+        const libreNmsUrl = `http://librenms:8000/api/v0/devices/${id}`;
+        const libreNmsResponse = await axios.get(libreNmsUrl, {
+            headers: { 'X-Auth-Token': apiToken }
+        });
+
+        res.status(200).json(libreNmsResponse.data.devices[0]);
+
+    } catch (error) {
+        console.error(`Error fetching device ${id}:`, error.message);
+        res.status(500).json({ error: 'Failed to fetch device details.' });
+    } finally {
+        client.release();
+    }
+});
 // --- Add a New Device for a Tenant ---
 app.post('/api/devices', authMiddleware, async (req, res) => {
     const tenantId = req.user.tenantId;
