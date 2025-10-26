@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { authenticatedFetch } from '../utils/api';
+import { useNavigate } from 'react-router-dom';
 import './Dashboard.css';
 
 function Dashboard() {
@@ -6,13 +8,12 @@ function Dashboard() {
     const [newDevice, setNewDevice] = useState({ hostname: '', snmp_community: 'public' });
     const [message, setMessage] = useState('');
     const [showAddForm, setShowAddForm] = useState(false);
+    const navigate = useNavigate();
 
     const fetchDevices = async () => {
         try {
             const apiUrl = `${process.env.REACT_APP_API_BASE_URL}/devices`;
-            const response = await fetch(apiUrl);
-            if (!response.ok) throw new Error('Failed to fetch');
-            const data = await response.json();
+            const data = await authenticatedFetch(apiUrl); 
             setDevices(data);
         } catch (error) {
             console.error('Error fetching devices:', error);
@@ -37,32 +38,39 @@ function Dashboard() {
 
         try {
             const apiUrl = `${process.env.REACT_APP_API_BASE_URL}/devices`;
-            const response = await fetch(apiUrl, {
+            
+            // Our new helper function takes the URL and an "options" object.
+            // It automatically handles the Authorization header, content-type,
+            // checking for errors, and parsing the JSON response.
+            const data = await authenticatedFetch(apiUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(newDevice)
             });
             
-            const data = await response.json();
-            
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to add device');
-            }
-            
+            // If we get here, the request was successful.
+            // 'data' is the already-parsed JSON response body.
             setMessage(data.message);
             setNewDevice({ hostname: '', snmp_community: 'public' });
             setShowAddForm(false);
-            fetchDevices();
+            fetchDevices(); // Refresh the device list
+
         } catch (error) {
+            // Our authenticatedFetch helper throws an error if the request fails,
+            // so we just need to catch it and display the message.
             console.error('Error adding device:', error);
-            setMessage(error.message || 'Failed to add device.');
+            setMessage(error.message); // The error.message will contain the specific error from the API
         }
     };
-
     const stats = {
         total: devices.length,
         online: devices.filter(d => d.status === true).length,
         offline: devices.filter(d => d.status === false).length
+    };
+    const handleLogout = () => {
+        // 1. Remove the token from the browser's local storage
+        localStorage.removeItem('token');
+        // 2. Redirect the user to the login page
+        navigate('/login');
     };
 
     return (
@@ -73,6 +81,12 @@ function Dashboard() {
                     <h1 className="logo-text">NetManager</h1>
                 </div>
                 <div className="user-info">
+                    <button 
+                        onClick={handleLogout} 
+                        className="logout-button" // Give it a class for styling
+                    >
+                        Log Out
+                    </button>
                     <button 
                         className="add-button"
                         onClick={() => setShowAddForm(!showAddForm)}
