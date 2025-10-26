@@ -1,25 +1,27 @@
 const jwt = require('jsonwebtoken');
 
 const authMiddleware = (req, res, next) => {
-    // Get the token from the Authorization header (e.g., "Bearer <token>")
+    let token;
+    // 1. Check for token in the Authorization header
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.split(' ')[1];
+    }
+    // 2. If not found, check for token in query parameters (for images)
+    else if (req.query && req.query.token) {
+        token = req.query.token;
+    }
 
     if (token == null) {
-        // If there's no token, the user is unauthorized
         return res.sendStatus(401); 
     }
 
     jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
         if (err) {
-            // If the token is invalid or expired
             return res.sendStatus(403); 
         }
-
-        // If the token is valid, the 'user' payload is attached to the request object
-        // Now, downstream routes can access req.user.tenantId, req.user.userId, etc.
         req.user = user;
-        next(); // Proceed to the next middleware or the route handler
+        next();
     });
 };
 

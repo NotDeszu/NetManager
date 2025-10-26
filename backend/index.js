@@ -196,6 +196,57 @@ app.get('/api/devices/:id', authMiddleware, async (req, res) => {
         client.release();
     }
 });
+
+// --- Get a Specific Graph for a Device (SECURED IMAGE PROXY) ---
+app.get('/api/devices/:id/graphs/:type', authMiddleware, async (req, res) => {
+    const { id, type } = req.params; // e.g., id=5, type='bits'
+    const tenantId = req.user.tenantId;
+
+    // We can get the timespan from a query parameter, defaulting to 'day'
+    // This allows URLs like ?timespan=week
+    const { timespan = 'day' } = req.query;
+
+    const apiToken = process.env.LIBRENMS_API_TOKEN ? process.env.LIBRENMS_API_TOKEN.trim() : null;
+    if (!apiToken) return res.status(500).json({ error: 'LibreNMS API token is not configured.' });
+
+    const client = await pool.connect();
+    try {
+        // SECURITY CHECK: First, verify this tenant owns this device ID.
+        const ownershipCheck = await client.query(
+            'SELECT * FROM tenant_devices WHERE tenant_id = $1 AND librenms_device_id = $2',
+            [tenantId, id]
+        );
+        if (ownershipCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Device not found or you do not have permission.' });
+        }
+
+        // If the check passes, build the URL to the LibreNMS graph image.
+        // Example graph types: 'bits' (for traffic), 'health_processor' (CPU), 'health_mempool' (Memory)
+        const libreNmsGraphUrl = `http://librenms:8000/api/v0/devices/${id}/graphs/${type}?timespan=${timespan}`;
+        
+        console.log(`Proxying graph request for tenant ${tenantId} to: ${libreNmsGraphUrl}`);
+
+        // We make the request with responseType: 'stream'. This is very efficient.
+        // It tells axios not to load the whole image into memory, but to stream it.
+        const response = await axios({
+            method: 'get',
+            url: libreNmsGraphUrl,
+            responseType: 'stream',
+            headers: { 'X-Auth-Token': apiToken }
+        });
+
+        // We "pipe" the image stream from LibreNMS directly to the client's response.
+        // This turns our endpoint into a high-performance image proxy.
+        response.data.pipe(res);
+
+    } catch (error) {
+        console.error(`Error proxying graph ${type} for device ${id}:`, error.message);
+        res.status(500).json({ error: 'Failed to fetch graph.' });
+    } finally {
+        client.release();
+    }
+});
+
 // --- Add a New Device for a Tenant ---
 app.post('/api/devices', authMiddleware, async (req, res) => {
     const tenantId = req.user.tenantId;

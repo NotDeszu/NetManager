@@ -3,11 +3,12 @@ import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 
 function DeviceDetail() {
-    // The useParams hook gets the ':id' from the URL
     const { id } = useParams(); 
     const [device, setDevice] = useState(null);
     const [error, setError] = useState('');
+    const [timespan, setTimespan] = useState('day');
 
+    // This useEffect for fetching the main device data is correct
     useEffect(() => {
         const fetchDeviceDetails = async () => {
             try {
@@ -25,7 +26,17 @@ function DeviceDetail() {
         };
 
         fetchDeviceDetails();
-    }, [id]); // The effect re-runs if the 'id' parameter changes
+    }, [id]);
+
+    // --- THIS IS THE CORRECTED HELPER FUNCTION ---
+    // It constructs the full, authenticated URL for the <img> tag's src attribute
+    const getAuthenticatedGraphUrl = (graphType) => {
+        const token = localStorage.getItem('token');
+        if (!token) return ''; // Return empty string if no token, preventing a bad request
+        
+        // This URL will now include the token as a query parameter
+        return `${process.env.REACT_APP_API_BASE_URL}/devices/${id}/graphs/${graphType}?timespan=${timespan}&token=${token}`;
+    };
 
     // --- Render Logic ---
     if (error) {
@@ -38,9 +49,7 @@ function DeviceDetail() {
 
     return (
         <div>
-            {/* Link to go back to the main dashboard */}
             <p><Link to="/dashboard">{'<'} Back to Dashboard</Link></p>
-            
             <h1>Device Details: {device.hostname}</h1>
 
             <div style={{ border: '1px solid black', padding: '1em' }}>
@@ -49,10 +58,51 @@ function DeviceDetail() {
                     <li><strong>Status:</strong> {device.status ? 'Up' : 'Down'}</li>
                     <li><strong>IP Address:</strong> {device.ip}</li>
                     <li><strong>Operating System:</strong> {device.os}</li>
-                    <li><strong>Uptime:</strong> {device.uptime_text}</li>
+                    <li><strong>Uptime:</strong> {device.uptime_text || 'N/A'}</li>
                     <li><strong>Hardware:</strong> {device.hardware}</li>
                     <li><strong>Serial Number:</strong> {device.serial || 'N/A'}</li>
                 </ul>
+            </div>
+
+            <hr />
+
+            <div style={{ border: '1px solid black', padding: '1em', marginTop: '1em' }}>
+                <h3>Performance Graphs</h3>
+                <div>
+                    <label htmlFor="timespan">Time Range: </label>
+                    <select id="timespan" value={timespan} onChange={e => setTimespan(e.target.value)}>
+                        <option value="day">Last 24 Hours</option>
+                        <option value="week">Last 7 Days</option>
+                        <option value="month">Last 30 Days</option>
+                        <option value="year">Last Year</option>
+                    </select>
+                </div>
+
+                <div style={{ marginTop: '1em' }}>
+                    <h4>Network Traffic (bits/sec)</h4>
+                    <img 
+                        key={`traffic-${timespan}`} // Using a more generic key
+                        src={getAuthenticatedGraphUrl('device_bits')} // <-- THE ONLY CHANGE IS HERE
+                        alt="Network traffic graph" 
+                        style={{ maxWidth: '100%' }}
+                    />
+
+                    <h4>CPU Usage (%)</h4>
+                    <img 
+                        key={`processor-${timespan}`}
+                        src={getAuthenticatedGraphUrl('health_processor')}
+                        alt="Processor health graph"
+                        style={{ maxWidth: '100%' }}
+                    />
+
+                    <h4>Memory Usage (%)</h4>
+                    <img 
+                        key={`mempool-${timespan}`}
+                        src={getAuthenticatedGraphUrl('health_mempool')}
+                        alt="Memory health graph"
+                        style={{ maxWidth: '100%' }}
+                    />
+                </div>
             </div>
         </div>
     );
