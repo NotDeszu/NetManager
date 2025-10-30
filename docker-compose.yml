@@ -161,7 +161,22 @@ services:
       timeout: 10s
       retries: 3
       start_period: 2m      
-  # --- ADD THE NEW SNMPSIM SERVICE BELOW ---
+  # --- SNMPD & SNMPSIM SERVICES BELOW ---
+  snmpd_device:
+    build: ./snmpd_device  # Path to the subdirectory with Dockerfile and entrypoint.sh
+    container_name: snmpd_device
+    hostname: snmpd_device
+    ports:
+      - "161:161/udp" # Map the standard SNMP port
+    environment:
+      # These variables configure the snmpd agent inside the container
+      - MIB_MODULES= # Leave blank to load all
+      - SNMP_COMMUNITY=public # Set the community string
+      - SNMP_CONTACT=YourName
+      - SNMP_LOCATION=Docker
+    networks:
+      - nms_network
+  
   snmpsim_device:
     image: tandrup/snmpsim
     container_name: snmpsim_device

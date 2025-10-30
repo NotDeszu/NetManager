@@ -246,6 +246,42 @@ app.get('/api/devices/:id/graphs/:type', authMiddleware, async (req, res) => {
         client.release();
     }
 });
+// --- Get the Event Log for a Device (SECURED) ---
+app.get('/api/devices/:id/eventlog', authMiddleware, async (req, res) => {
+    const { id } = req.params;
+    const tenantId = req.user.tenantId;
+
+    const apiToken = process.env.LIBRENMS_API_TOKEN ? process.env.LIBRENMS_API_TOKEN.trim() : null;
+    if (!apiToken) return res.status(500).json({ error: 'LibreNMS API token is not configured.' });
+
+    const client = await pool.connect();
+    try {
+        // SECURITY CHECK: Verify this tenant owns this device ID.
+        const ownershipCheck = await client.query(
+            'SELECT * FROM tenant_devices WHERE tenant_id = $1 AND librenms_device_id = $2',
+            [tenantId, id]
+        );
+        if (ownershipCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Device not found or you do not have permission.' });
+        }
+
+        // If check passes, fetch the event log from LibreNMS. We'll limit it to the last 20 events.
+        const libreNmsUrl = `http://librenms:8000/api/v0/logs/eventlog/${id}?limit=20`;
+        
+        console.log(`Fetching event log for device ${id}`);
+        const response = await axios.get(libreNmsUrl, {
+            headers: { 'X-Auth-Token': apiToken }
+        });
+
+        res.status(200).json(response.data.eventlog);
+
+    } catch (error) {
+        console.error(`Error fetching event log for device ${id}:`, error.message);
+        res.status(500).json({ error: 'Failed to fetch event log.' });
+    } finally {
+        client.release();
+    }
+});
 
 // --- Add a New Device for a Tenant ---
 app.post('/api/devices', authMiddleware, async (req, res) => {

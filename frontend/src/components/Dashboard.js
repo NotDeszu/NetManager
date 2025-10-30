@@ -94,8 +94,8 @@ function Dashboard() {
                     {/* Display the current user's email */}
                     {currentUser && <span className="current-user">Welcome, {currentUser}</span>}
                     <button 
+                        className="add-button"
                         onClick={handleLogout} 
-                        className="logout-button"
                     >
                         Log Out
                     </button>
