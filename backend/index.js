@@ -138,23 +138,52 @@ app.get('/api/test-librenms', authMiddleware, async (req, res) => {
         res.status(500).json({ error: 'Failed to communicate with the LibreNMS service.', details: error.message });
     }
 });
-// --- Get All Devices for a Tenant ---
+
+// --- Get All Devices for a Tenant (Improved and More Robust) ---
 app.get('/api/devices', authMiddleware, async (req, res) => {
     const tenantId = req.user.tenantId;
-    const libreNmsUrl = `http://librenms:8000/api/v0/devices`;
+    console.log(`[GET /api/devices] Fetching devices for tenantId: ${tenantId}`);
+
     const apiToken = process.env.LIBRENMS_API_TOKEN ? process.env.LIBRENMS_API_TOKEN.trim() : null;
     if (!apiToken) return res.status(500).json({ error: 'LibreNMS API token is not configured.' });
+
     const client = await pool.connect();
     try {
-        const ownedDevicesResult = await client.query('SELECT librenms_device_id FROM tenant_devices WHERE tenant_id = $1', [tenantId]);
+        // Step 1: Get the list of device IDs this tenant owns from OUR database.
+        const ownedDevicesResult = await client.query(
+            'SELECT librenms_device_id FROM tenant_devices WHERE tenant_id = $1',
+            [tenantId]
+        );
         const ownedDeviceIds = ownedDevicesResult.rows.map(row => row.librenms_device_id);
-        if (ownedDeviceIds.length === 0) return res.status(200).json([]);
-        const libreNmsResponse = await axios.get(libreNmsUrl, { headers: { 'X-Auth-Token': apiToken } });
-        const allDevices = libreNmsResponse.data.devices;
-        const tenantDevices = allDevices.filter(device => ownedDeviceIds.includes(device.device_id));
+        console.log(`[GET /api/devices] Tenant owns device IDs:`, ownedDeviceIds);
+
+        if (ownedDeviceIds.length === 0) {
+            console.log(`[GET /api/devices] Tenant owns no devices. Returning empty array.`);
+            return res.status(200).json([]); // Return an empty array if they own no devices
+        }
+
+        // Step 2: Fetch details for ONLY these specific devices from LibreNMS.
+        // We will make one API call for each device. This is simpler and more reliable.
+        const devicePromises = ownedDeviceIds.map(deviceId => {
+            const libreNmsUrl = `http://librenms:8000/api/v0/devices/${deviceId}`;
+            return axios.get(libreNmsUrl, { headers: { 'X-Auth-Token': apiToken } });
+        });
+        
+        // Wait for all the API calls to complete.
+        const responses = await Promise.all(devicePromises);
+
+        // Extract the device data from each response.
+        const tenantDevices = responses.map(response => response.data.devices[0]);
+        console.log(`[GET /api/devices] Successfully fetched details for ${tenantDevices.length} devices.`);
+
         res.status(200).json(tenantDevices);
+
     } catch (error) {
-        console.error('Error fetching devices:', error.message);
+        // More detailed error logging
+        console.error('[GET /api/devices] An error occurred:', error.message);
+        if (error.response) {
+            console.error('[GET /api/devices] LibreNMS API Error:', error.response.data);
+        }
         res.status(500).json({ error: 'Failed to fetch device data.' });
     } finally {
         client.release();
@@ -197,37 +226,49 @@ app.get('/api/devices/:id', authMiddleware, async (req, res) => {
     }
 });
 
-// --- Get a Specific Graph for a Device (SECURED IMAGE PROXY) ---
-app.get('/api/devices/:id/graphs/:type', authMiddleware, async (req, res) => {
-    const { id, type } = req.params; // e.g., id=5, type='bits'
+// --- Get a Specific Graph for a Device (ROBUST IMAGE PROXY) ---
+app.get('/api/devices/:id/:type', authMiddleware, async (req, res) => {
+    const { id, type } = req.params;
     const tenantId = req.user.tenantId;
-
-    // We can get the timespan from a query parameter, defaulting to 'day'
-    // This allows URLs like ?timespan=week
     const { timespan = 'day' } = req.query;
-
     const apiToken = process.env.LIBRENMS_API_TOKEN ? process.env.LIBRENMS_API_TOKEN.trim() : null;
-    if (!apiToken) return res.status(500).json({ error: 'LibreNMS API token is not configured.' });
+
+    if (!apiToken) {
+        return res.status(500).send('API token not configured on server.');
+    }
 
     const client = await pool.connect();
     try {
-        // SECURITY CHECK: First, verify this tenant owns this device ID.
+        // SECURITY CHECK: Verify this tenant owns this device ID.
         const ownershipCheck = await client.query(
             'SELECT * FROM tenant_devices WHERE tenant_id = $1 AND librenms_device_id = $2',
             [tenantId, id]
         );
+
         if (ownershipCheck.rows.length === 0) {
-            return res.status(404).json({ error: 'Device not found or you do not have permission.' });
+            return res.status(404).send('Device not found or permission denied.');
         }
 
-        // If the check passes, build the URL to the LibreNMS graph image.
-        // Example graph types: 'bits' (for traffic), 'health_processor' (CPU), 'health_mempool' (Memory)
-        const libreNmsGraphUrl = `http://librenms:8000/api/v0/devices/${id}/graphs/${type}?timespan=${timespan}`;
-        
+        // Map timespan to from/to (rrdtool-style strings; adjust mappings as needed)
+        let from = 'now - 1 day'; // Default to 1 day
+        let to = 'now';
+        switch (timespan) {
+            case 'hour':
+                from = 'now - 1 hour';
+                break;
+            case 'week':
+                from = 'now - 1 week';
+                break;
+            case 'month':
+                from = 'now - 1 month';
+                break;
+            // Add more (e.g., 'year') if your frontend supports them
+        }
+
+        // Build the LibreNMS URL with proper params (no 'timespan')
+        const libreNmsGraphUrl = `http://librenms:8000/api/v0/devices/${id}/${type}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
         console.log(`Proxying graph request for tenant ${tenantId} to: ${libreNmsGraphUrl}`);
 
-        // We make the request with responseType: 'stream'. This is very efficient.
-        // It tells axios not to load the whole image into memory, but to stream it.
         const response = await axios({
             method: 'get',
             url: libreNmsGraphUrl,
@@ -235,13 +276,33 @@ app.get('/api/devices/:id/graphs/:type', authMiddleware, async (req, res) => {
             headers: { 'X-Auth-Token': apiToken }
         });
 
-        // We "pipe" the image stream from LibreNMS directly to the client's response.
-        // This turns our endpoint into a high-performance image proxy.
+        // Set status and copy relevant headers before piping
+        res.status(response.status);
+        res.set('Content-Type', response.headers['content-type'] || 'image/png'); // Fallback to PNG
+        if (response.headers['content-length']) {
+            res.set('Content-Length', response.headers['content-length']);
+        }
+        // Optionally copy more headers if needed (e.g., Cache-Control)
+
+        // Pipe the stream
         response.data.pipe(res);
 
+        // Handle stream errors to prevent hangs
+        response.data.on('error', (err) => {
+            console.error(`Stream error for graph ${type}:`, err.message);
+            if (!res.headersSent) {
+                res.status(500).send('Error streaming graph image.');
+            }
+        });
+
     } catch (error) {
-        console.error(`Error proxying graph ${type} for device ${id}:`, error.message);
-        res.status(500).json({ error: 'Failed to fetch graph.' });
+        console.error(`[Graph Proxy Error] for ${type}:`, error.message);
+        if (error.response) {
+            console.error(`[Graph Proxy] LibreNMS responded with status: ${error.response.status}`);
+            res.status(error.response.status).send(error.response.statusText);
+        } else {
+            res.status(500).send('An internal error occurred while fetching the graph.');
+        }
     } finally {
         client.release();
     }

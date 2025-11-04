@@ -161,37 +161,19 @@ services:
       timeout: 10s
       retries: 3
       start_period: 2m      
-  # --- ADD THE NEW SNMPSIM SERVICE BELOW ---
-  snmpsim_device:
-    image: tandrup/snmpsim
-    container_name: snmpsim_device
-    hostname: snmpsim_device
-    environment:
-      - EXTRA_FLAGS=--agent-udpv4-endpoint=0.0.0.0:161 --v2c-arch
+  # --- ADD THE NEW SNMPd SERVICE BELOW ---
+  snmpd_device:
+    build: ./snmpd_device  # Path to the subdirectory with Dockerfile and entrypoint.sh
+    container_name: snmpd_device
+    hostname: snmpd_device
     ports:
-      - "1161:161/udp"
-    networks:
-      - nms_network
- 
-  snmpsim_device_2:
-    image: tandrup/snmpsim
-    container_name: snmpsim_device_2
-    hostname: snmpsim_device_2
+      - "161:161/udp" # Map the standard SNMP port
     environment:
-      - EXTRA_FLAGS=--agent-udpv4-endpoint=0.0.0.0:161 --v2c-arch
-    ports:
-      - "1162:161/udp"  # Unique host port for external testing (optional)
-    networks:
-      - nms_network
-
-  snmpsim_device_3:
-    image: tandrup/snmpsim
-    container_name: snmpsim_device_3
-    hostname: snmpsim_device_3
-    environment:
-      - EXTRA_FLAGS=--agent-udpv4-endpoint=0.0.0.0:161 --v2c-arch
-    ports:
-      - "1163:161/udp"
+      # These variables configure the snmpd agent inside the container
+      - MIB_MODULES= # Leave blank to load all
+      - SNMP_COMMUNITY=public # Set the community string
+      - SNMP_CONTACT=YourName
+      - SNMP_LOCATION=Docker
     networks:
       - nms_network
   # --- FRONTEND SERVICE DEFINED FOR PRODUCTION ---

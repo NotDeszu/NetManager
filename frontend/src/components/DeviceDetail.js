@@ -35,7 +35,7 @@ function DeviceDetail() {
         if (!token) return ''; // Return empty string if no token, preventing a bad request
         
         // This URL will now include the token as a query parameter
-        return `${process.env.REACT_APP_API_BASE_URL}/devices/${id}/graphs/${graphType}?timespan=${timespan}&token=${token}`;
+        return `${process.env.REACT_APP_API_BASE_URL}/devices/${id}/${graphType}?timespan=${timespan}&token=${token}`;
     };
 
     // --- Render Logic ---
@@ -68,15 +68,7 @@ function DeviceDetail() {
 
             <div style={{ border: '1px solid black', padding: '1em', marginTop: '1em' }}>
                 <h3>Performance Graphs</h3>
-                <div>
-                    <label htmlFor="timespan">Time Range: </label>
-                    <select id="timespan" value={timespan} onChange={e => setTimespan(e.target.value)}>
-                        <option value="day">Last 24 Hours</option>
-                        <option value="week">Last 7 Days</option>
-                        <option value="month">Last 30 Days</option>
-                        <option value="year">Last Year</option>
-                    </select>
-                </div>
+
 
                 <div style={{ marginTop: '1em' }}>
                     <h4>Network Traffic (bits/sec)</h4>
@@ -87,18 +79,18 @@ function DeviceDetail() {
                         style={{ maxWidth: '100%' }}
                     />
 
-                    <h4>CPU Usage (%)</h4>
+                    <h4>System Up time</h4>
                     <img 
-                        key={`processor-${timespan}`}
-                        src={getAuthenticatedGraphUrl('health_processor')}
-                        alt="Processor health graph"
+                        key={`uptime-${timespan}`}
+                        src={getAuthenticatedGraphUrl('device_uptime')}
+                        alt="System Uptime graph"
                         style={{ maxWidth: '100%' }}
                     />
 
                     <h4>Memory Usage (%)</h4>
                     <img 
                         key={`mempool-${timespan}`}
-                        src={getAuthenticatedGraphUrl('health_mempool')}
+                        src={getAuthenticatedGraphUrl('device_mempool')}
                         alt="Memory health graph"
                         style={{ maxWidth: '100%' }}
                     />
