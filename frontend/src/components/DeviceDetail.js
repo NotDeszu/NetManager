@@ -5,46 +5,63 @@ import axios from 'axios';
 function DeviceDetail() {
     const { id } = useParams(); 
     const [device, setDevice] = useState(null);
+    const [eventLog, setEventLog] = useState([]);
     const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(true);
     const [timespan, setTimespan] = useState('day');
 
-    // This useEffect for fetching the main device data is correct
     useEffect(() => {
-        const fetchDeviceDetails = async () => {
-            try {
-                const token = localStorage.getItem('token');
-                const apiUrl = `${process.env.REACT_APP_API_BASE_URL}/devices/${id}`;
-                
-                const response = await axios.get(apiUrl, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+        const fetchAllDeviceData = async () => {
+            setIsLoading(true);
+            const token = localStorage.getItem('token');
+            if (!token) {
+                setError("No authentication token found.");
+                setIsLoading(false);
+                return;
+            }
 
-                setDevice(response.data);
+            try {
+                const headers = { 'Authorization': `Bearer ${token}` };
+                const deviceApiUrl = `${process.env.REACT_APP_API_BASE_URL}/devices/${id}`;
+                const eventLogApiUrl = `${process.env.REACT_APP_API_BASE_URL}/devices/${id}/eventlog`;
+
+                // Use Promise.all to fetch both data points concurrently
+                const [deviceResponse, eventLogResponse] = await Promise.all([
+                    axios.get(deviceApiUrl, { headers }),
+                    axios.get(eventLogApiUrl, { headers })
+                ]);
+
+                // Explicitly set the state from the responses
+                setDevice(deviceResponse.data);
+                setEventLog(eventLogResponse.data);
+
             } catch (err) {
-                setError(err.response ? err.response.data.error : 'Failed to fetch device details.');
+                setError(err.response ? err.response.data.error : 'Failed to fetch device data.');
+            } finally {
+                setIsLoading(false);
             }
         };
 
-        fetchDeviceDetails();
+        fetchAllDeviceData();
     }, [id]);
 
-    // --- THIS IS THE CORRECTED HELPER FUNCTION ---
-    // It constructs the full, authenticated URL for the <img> tag's src attribute
     const getAuthenticatedGraphUrl = (graphType) => {
         const token = localStorage.getItem('token');
-        if (!token) return ''; // Return empty string if no token, preventing a bad request
-        
-        // This URL will now include the token as a query parameter
+        if (!token) return '';
         return `${process.env.REACT_APP_API_BASE_URL}/devices/${id}/${graphType}?timespan=${timespan}&token=${token}`;
     };
 
-    // --- Render Logic ---
+    if (isLoading) {
+        return <p>Loading device details...</p>;
+    }
+
     if (error) {
         return <div><p>Error: {error}</p><Link to="/dashboard">Back to Dashboard</Link></div>;
     }
 
+    // Add a check to ensure device is not null before rendering
     if (!device) {
-        return <p>Loading device details...</p>;
+        return <p>Device details could not be loaded.</p>;
     }
 
     return (
@@ -68,33 +85,54 @@ function DeviceDetail() {
 
             <div style={{ border: '1px solid black', padding: '1em', marginTop: '1em' }}>
                 <h3>Performance Graphs</h3>
-
+                <div>
+                    <label htmlFor="timespan">Time Range: </label>
+                    <select id="timespan" value={timespan} onChange={e => setTimespan(e.target.value)}>
+                        <option value="day">Last 24 Hours</option>
+                        <option value="week">Last 7 Days</option>
+                        <option value="month">Last 30 Days</option>
+                        <option value="year">Last Year</option>
+                    </select>
+                </div>
 
                 <div style={{ marginTop: '1em' }}>
                     <h4>Network Traffic (bits/sec)</h4>
-                    <img 
-                        key={`traffic-${timespan}`} // Using a more generic key
-                        src={getAuthenticatedGraphUrl('device_bits')} // <-- THE ONLY CHANGE IS HERE
-                        alt="Network traffic graph" 
-                        style={{ maxWidth: '100%' }}
-                    />
-
-                    <h4>System Up time</h4>
-                    <img 
-                        key={`uptime-${timespan}`}
-                        src={getAuthenticatedGraphUrl('device_uptime')}
-                        alt="System Uptime graph"
-                        style={{ maxWidth: '100%' }}
-                    />
-
-                    <h4>Memory Usage (%)</h4>
-                    <img 
-                        key={`mempool-${timespan}`}
-                        src={getAuthenticatedGraphUrl('device_mempool')}
-                        alt="Memory health graph"
-                        style={{ maxWidth: '100%' }}
-                    />
+                    <img key={`bits-${timespan}`} src={getAuthenticatedGraphUrl('device_bits')} alt="Network traffic graph" style={{ maxWidth: '100%' }} />
+                    <h4>System Uptime</h4>
+                    <img key={`uptime-${timespan}`} src={getAuthenticatedGraphUrl('device_uptime')} alt="System Uptime graph" style={{ maxWidth: '100%' }} />
+                    <h4>Memory Usage</h4>
+                    <img key={`mempool-${timespan}`} src={getAuthenticatedGraphUrl('device_mempool')} alt="Memory health graph" style={{ maxWidth: '100%' }} />
                 </div>
+            </div>
+
+            <hr />
+
+            <div style={{ border: '1px solid black', padding: '1em', marginTop: '1em' }}>
+                <h3>Recent Events</h3>
+                {eventLog.length > 0 ? (
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                        <thead>
+                            <tr>
+                                <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'left' }}>Timestamp</th>
+                                <th style={{ border: '1px solid #ddd', padding: '8px', textAlign: 'left' }}>Message</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {eventLog.map((logEntry, index) => (
+                                <tr key={index}>
+                                    <td style={{ border: '1px solid #ddd', padding: '8px', whiteSpace: 'nowrap' }}>
+                                        {new Date(logEntry.datetime).toLocaleString()}
+                                    </td>
+                                    <td style={{ border: '1px solid #ddd', padding: '8px' }}>
+                                        {logEntry.message}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                ) : (
+                    <p>No event log entries found for this device.</p>
+                )}
             </div>
         </div>
     );

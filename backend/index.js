@@ -226,6 +226,49 @@ app.get('/api/devices/:id', authMiddleware, async (req, res) => {
     }
 });
 
+// --- Get the Event Log for a Device (SECURED) ---
+app.get('/api/devices/:id/eventlog', authMiddleware, async (req, res) => {
+    const { id } = req.params;
+    const tenantId = req.user.tenantId;
+    console.log(`[EVENTLOG] Fetching eventlog for device ${id}, tenant ${tenantId}`);
+
+    const apiToken = process.env.LIBRENMS_API_TOKEN ? process.env.LIBRENMS_API_TOKEN.trim() : null;
+    if (!apiToken) return res.status(500).json({ error: 'LibreNMS API token is not configured.' });
+
+    const client = await pool.connect();
+    try {
+        // SECURITY CHECK: Verify this tenant owns this device ID.
+        const ownershipCheck = await client.query(
+            'SELECT * FROM tenant_devices WHERE tenant_id = $1 AND librenms_device_id = $2',
+            [tenantId, id]
+        );
+        if (ownershipCheck.rows.length === 0) {
+            console.log(`[EVENTLOG] Tenant ${tenantId} does not own device ${id}. Denying access.`);
+            return res.status(404).json({ error: 'Device not found or you do not have permission.' });
+        }
+
+        // If check passes, fetch the event log. We will add a simple limit and sort newest first.
+        const libreNmsUrl = `http://librenms:8000/api/v0/logs/eventlog/${id}?limit=25&sortorder=DESC`;
+        
+        console.log(`[EVENTLOG] Calling LibreNMS API: ${libreNmsUrl}`);
+        const response = await axios.get(libreNmsUrl, {
+            headers: { 'X-Auth-Token': apiToken }
+        });
+
+        // The API nests the result under a "logs" key
+        res.status(200).json(response.data.logs || []);
+
+    } catch (error) {
+        console.error(`[EVENTLOG] Error fetching event log for device ${id}:`, error.message);
+        if (error.response) {
+            console.error(`[EVENTLOG] LibreNMS responded with status ${error.response.status}:`, error.response.data);
+        }
+        res.status(500).json({ error: 'Failed to fetch event log.' });
+    } finally {
+        client.release();
+    }
+});
+
 // --- Get a Specific Graph for a Device (ROBUST IMAGE PROXY) ---
 app.get('/api/devices/:id/:type', authMiddleware, async (req, res) => {
     const { id, type } = req.params;
@@ -308,6 +351,8 @@ app.get('/api/devices/:id/:type', authMiddleware, async (req, res) => {
     }
 });
 
+
+
 // --- Add a New Device for a Tenant ---
 app.post('/api/devices', authMiddleware, async (req, res) => {
     const tenantId = req.user.tenantId;
@@ -337,6 +382,7 @@ app.post('/api/devices', authMiddleware, async (req, res) => {
         res.status(500).json({ error: 'Failed to communicate with the LibreNMS service.', details: error.response ? error.response.data : error.message });
     }
 });
+
 
 // --- Start Server ---
 const PORT = 3000;
