@@ -269,6 +269,49 @@ app.get('/api/devices/:id/eventlog', authMiddleware, async (req, res) => {
     }
 });
 
+// --- Get the Ports for a Device (SECURED) ---
+app.get('/api/devices/:id/ports', authMiddleware, async (req, res) => {
+    const { id } = req.params;
+    const tenantId = req.user.tenantId;
+    console.log(`[PORTS] Fetching ports for device ${id}, tenant ${tenantId}`);
+
+    const apiToken = process.env.LIBRENMS_API_TOKEN ? process.env.LIBRENMS_API_TOKEN.trim() : null;
+    if (!apiToken) return res.status(500).json({ error: 'LibreNMS API token is not configured.' });
+
+    const client = await pool.connect();
+    try {
+        // SECURITY CHECK: Verify this tenant owns this device ID.
+        const ownershipCheck = await client.query(
+            'SELECT * FROM tenant_devices WHERE tenant_id = $1 AND librenms_device_id = $2',
+            [tenantId, id]
+        );
+        if (ownershipCheck.rows.length === 0) {
+            console.log(`[PORTS] Tenant ${tenantId} does not own device ${id}. Denying access.`);
+            return res.status(404).json({ error: 'Device not found or you do not have permission.' });
+        }
+
+        // Fetch ports with key columns (adjust as needed)
+        const libreNmsUrl = `http://librenms:8000/api/v0/devices/${id}/ports?columns=ifName,ifDescr,ifSpeed,ifOperStatus,ifAdminStatus`;
+        
+        console.log(`[PORTS] Calling LibreNMS API: ${libreNmsUrl}`);
+        const response = await axios.get(libreNmsUrl, {
+            headers: { 'X-Auth-Token': apiToken }
+        });
+
+        // Response is under "ports" key
+        res.status(200).json(response.data.ports || []);
+
+    } catch (error) {
+        console.error(`[PORTS] Error fetching ports for device ${id}:`, error.message);
+        if (error.response) {
+            console.error(`[PORTS] LibreNMS responded with status ${error.response.status}:`, error.response.data);
+        }
+        res.status(500).json({ error: 'Failed to fetch ports.' });
+    } finally {
+        client.release();
+    }
+});
+
 // --- Get a Specific Graph for a Device (ROBUST IMAGE PROXY) ---
 app.get('/api/devices/:id/:type', authMiddleware, async (req, res) => {
     const { id, type } = req.params;

@@ -95,7 +95,7 @@ function Dashboard() {
                     {currentUser && <span className="current-user">Welcome, {currentUser}</span>}
                     <button 
                         onClick={handleLogout} 
-                        className="logout-button"
+                        className="add-button"
                     >
                         Log Out
                     </button>
