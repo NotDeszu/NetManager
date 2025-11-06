@@ -7,10 +7,14 @@ services:
       POSTGRES_USER: myuser
       POSTGRES_PASSWORD: mypassword
       POSTGRES_DB: saas_db
+      N8N_DATABASE_USER: ${N8N_DATABASE_USER}
+      N8N_DATABASE_PASSWORD: ${N8N_DATABASE_PASSWORD}
+      N8N_DATABASE_NAME: ${N8N_DATABASE_NAME}
     ports:
       - "5432:5432" # Expose the DB port to your host machine for easy connection
     volumes:
       - postgres_data:/var/lib/postgresql/data # Persist database data
+      - ./postgres-init:/docker-entrypoint-initdb.d 
     networks:
       - nms_network
     # --- ADD THIS HEALTHCHECK BLOCK BACK IN ---
@@ -176,6 +180,41 @@ services:
       - SNMP_LOCATION=Docker
     networks:
       - nms_network
+  
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    container_name: n8n_automation
+    ports:
+      - "5678:5678" # http://localhost:5678 to access n8n
+    environment:
+      # --- Database Configuration (from my original proposal, still correct) ---
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_USER=${N8N_DATABASE_USER}
+      - DB_POSTGRESDB_PASSWORD=${N8N_DATABASE_PASSWORD}
+      - DB_POSTGRESDB_DATABASE=${N8N_DATABASE_NAME}
+      - DB_POSTGRESDB_PORT=5432
+      
+      # --- Authentication (from my original proposal, still correct) ---
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=pass123 # CHANGE THIS
+
+      # --- NEW: Best Practices from Your Research ---
+      - GENERIC_TIMEZONE=CST # IMPORTANT: Or your local timezone, e.g., 'America/New_York'
+      - TZ=UTC # Match the above
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - N8N_RUNNERS_ENABLED=true
+      # This tells n8n how to construct webhook URLs for external services
+      - WEBHOOK_URL=http://localhost:5678/ 
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - nms_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+  
   # --- FRONTEND SERVICE DEFINED FOR PRODUCTION ---
   saas-frontend:
     build: ./frontend
@@ -194,6 +233,6 @@ networks:
 # Define the volume for persistent data
 volumes:
   postgres_data:
-  # --- ADD THE NEW LIBRENMS VOLUMES BELOW ---
   librenms_db_data:
   librenms_data:
+  n8n_data:
