@@ -132,3 +132,6 @@
         SHOW DATABASES;
         USE librenms_db;
         SHOW TABLES;
+
+    To delete all data from a table in postgres 
+        TRUNCATE TABLE table_name;

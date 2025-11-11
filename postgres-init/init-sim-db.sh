@@ -2,7 +2,7 @@
 set -e
 
 # This script creates a new database and populates it with simulated data.
-psql -v ON_ERROR_STOP=1 --username "$POSTgres_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
     -- Create a new database for our simulation data
     CREATE DATABASE simulation_db;
 EOSQL
