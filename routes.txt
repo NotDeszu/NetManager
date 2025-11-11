@@ -126,3 +126,9 @@
             "hostname": "snmpsim_device_2",
             "snmp_community": "demo"
         }
+
+    To access directly to the MariaDB libreNMS database:
+    docker exec -it librenms_db mysql -u root -p
+        SHOW DATABASES;
+        USE librenms_db;
+        SHOW TABLES;
