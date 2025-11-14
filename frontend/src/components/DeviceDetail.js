@@ -228,6 +228,7 @@ function DeviceDetail() {
                             <thead>
                                 <tr>
                                     <th>Timestamp</th>
+                                    <th>Type</th>
                                     <th>Message</th>
                                 </tr>
                             </thead>
@@ -236,6 +237,9 @@ function DeviceDetail() {
                                     <tr key={index}>
                                         <td className="event-timestamp">
                                             {new Date(logEntry.datetime).toLocaleString()}
+                                        </td>
+                                        <td className="event-message">
+                                            {logEntry.type}
                                         </td>
                                         <td className="event-message">
                                             {logEntry.message}

@@ -135,3 +135,35 @@
 
     To delete all data from a table in postgres 
         TRUNCATE TABLE table_name;
+
+    Chnage the polling time
+        #STEP 1: to change it to 1 min <last is seconds>
+        docker exec -it librenms_dispatcher php /opt/librenms/lnms config:set service_poller_frequency 60
+        #to Verify it worked:
+        docker exec librenms_dispatcher php /opt/librenms/lnms config:get service_poller_frequency
+
+        #STEP 2: restart the dispatcher
+        docker restart librenms_dispatcher
+
+        #STEP 3 (very important): ONE-TIME migration of all existing RRD files, so graphs don't break
+        docker exec -it librenms_dispatcher php /opt/librenms/scripts/rrdstep.php -h all
+
+    To change the IP address of my linux laptop:
+        first discconect the wifi through the GUI, then
+        sudo ip addr flush dev enx00e04c36268d
+        sudo ip addr add 192.168.10.5/24 dev enx00e04c36268d    #change the ip for the dessired one
+        sudo ip link set enx00e04c36268d up
+        sudo ip route add default via 192.168.10.1  #change the IP for the dessired default gateway
+        #now test with a ping, ping -c 5 <ip address>
+        nmcli radio wifi on #when done, so it comes back to normal
+
+    Commands to configure SNMP in net device:
+        conf terminal
+        (config)# snmp-server community public RO
+    
+    To see if there is snmp correctly configured on the network device (change the ip for the one we want to see)
+        docker exec librenms_dispatcher snmpget -v 2c -c public 192.168.10.3 sysName.0
+        #the answer should be something like (SW1 in this case, the res would be the hostname of the target device)
+        SNMPv2-MIB::sysName.0 = STRING: SW1
+
+    
